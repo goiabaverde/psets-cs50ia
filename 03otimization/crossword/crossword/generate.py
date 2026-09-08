@@ -135,14 +135,14 @@ class CrosswordCreator():
         Return True if a revision was made to the domain of `x`; return
         False if no revision was made.
         """
-        # Get the overlaps between the variable x and y
+        # Get the overlaps between the variables x and y
         overlaps = self.crossword.overlaps[x,y]
-        elements_to_delete = set() # Set with words that will be deleted
-        revised = False # Initialize revised variable as False
+        elements_to_delete = set() # Set of words that will be deleted
+        revised = False # Initialize the revised variable as False
 
         # Verify if there is an overlap
         if len(overlaps) != 0:
-            # Check if for some word in x's domain if there is any word in y's domain that matches, if there is no word in y's domain that matches, then the word will be deleted from x's domain.
+            # Check if for each word in x's domain there is a matching word in y's domain. If not, the word will be deleted from x's domain.
             for x_elem in self.domains[x]:
                 delete = True
                 for y_elem in self.domains[y]:
@@ -168,10 +168,10 @@ class CrosswordCreator():
         Return True if arc consistency is enforced and no domains are empty;
         return False if one or more domains end up empty.
         """
-        queue = Queue(initial_list = arcs) # Initialize queue
+        queue = Queue(initial_list = arcs) # Initialize the queue
 
         if arcs == None:
-            # If arcs argument is None, create the queue with all the arcs
+            # If the arcs argument is None, create the queue with all the arcs in the problem
             for var in self.domains:
                 for neighbor in self.crossword.neighbors(var):
                     if (var, neighbor) not in queue.itens:
@@ -195,7 +195,7 @@ class CrosswordCreator():
         crossword variable); return False otherwise.
         """
 
-        # The assignment is complete if each one of the variables in the crossword has an associated word
+        # The assignment is complete if every variable in the crossword has an associated word
         if len(assignment.keys()) == len(self.crossword.variables):
             for value in assignment.values():
                 if len(value) == 0 or type(value) != str:
@@ -212,9 +212,9 @@ class CrosswordCreator():
         Return True if `assignment` is consistent (i.e., words fit in crossword
         puzzle without conflicting characters); return False otherwise.
         """
-        keys = list(assignment.keys()) # Initialize the list with all the variables in the assignment dict
+        keys = list(assignment.keys()) # Initialize a list with all the variables in the assignment dictionary
 
-        # Check if the word is unique in the assignment dict
+        # Check if each word is unique in the assignment dictionary
         for word in assignment.values():
             if list(assignment.values()).count(word) != 1:
                 return False
@@ -232,7 +232,6 @@ class CrosswordCreator():
         return True
             
 
-
  
     
     def order_domain_values(self, var, assignment):
@@ -243,11 +242,11 @@ class CrosswordCreator():
         that rules out the fewest values among the neighbors of `var`.
         """
 
-        constraint_per_word = dict() # Initialize the dict with the word as the key and the number of constraints that choosing this word generates in the crossword
+        constraint_per_word = dict() # Initialize a dictionary with the word as the key and the number of constraints its selection generates in the crossword
 
-        variables_to_verify = self.crossword.neighbors(var) - set(assignment.keys()) # The variables which will be verified are the variables that are neighbors and are not in the assignment
+        variables_to_verify = self.crossword.neighbors(var) - set(assignment.keys()) # The variables to verify are the unassigned neighbors
 
-        # Given a word from y's domain, check how many constraints this choice of word makes on the variables that are neighbors
+        # Given a word from var's domain, count how many constraints this choice imposes on neighboring variables
         for y_elem in self.domains[var]:
             counter = 0
             for x in variables_to_verify:
@@ -273,14 +272,14 @@ class CrosswordCreator():
         elements_in_domain_per_variable = dict()
         elements_degree_per_variable = dict()
 
-        # Adding data to the dictionaries
+        # Add data to the dictionaries
         for variable in unassigned_variables:
             elements_in_domain_per_variable[variable] = len(self.domains[variable])
             elements_degree_per_variable[variable] = len(self.crossword.neighbors(variable))
 
         list_variables_domains = sorted(elements_in_domain_per_variable, key = elements_in_domain_per_variable.get)
 
-        # Minimum Remaining Values
+        # Minimum Remaining Values (MRV)
         min_domain = min(elements_in_domain_per_variable, key=elements_in_domain_per_variable.get) 
 
       
@@ -288,10 +287,10 @@ class CrosswordCreator():
         # Check if there is a tie in MRV
         if list(elements_in_domain_per_variable.values()).count(elements_in_domain_per_variable[min_domain]) != 1:
 
-            # Create the dict with the variable as the key and degree as the value, and after this use the maximum degree as a tiebreaker
+            # Create a dictionary with the tied variables as keys and their degrees as values, then use the maximum degree as a tiebreaker
             result = {key : elements_degree_per_variable[key]  for key, value in elements_in_domain_per_variable.items() if value == elements_in_domain_per_variable[min_domain]}
             
-            # Check if the maximum is unique
+            # Check if the maximum degree is unique
             if list(result.values()).count(max(result.values())) == 1:
                 return max(result, key=result.get)
             else:
@@ -302,9 +301,25 @@ class CrosswordCreator():
         
             
 
+    def Inference(self, var):  
+        """
+        Function that, when used with the backtrack algorithm, produces the maintaining arc consistency algorithm. After assigning a variable, this function is called and reduces the domains of the other variables using AC3, and every new assignment that can be made is then returned.
+        """
+        # Get the variables that have only one element in domain
+        initial_var_with_single_domain = {var for var in self.domains.keys() if len(self.domains[var]) == 1}
+
+        # Create the arcs that will be used in arc3
+        neighbors = self.crossword.neighbors(var)
+        arcs = [(neighbor, var) for neighbor in neighbors]
+
+        if self.ac3(arcs=arcs):
+           var_with_single_domain = {var for var in self.domains.keys() if len(self.domains[var]) == 1}
+           new_var_with_single_domain = var_with_single_domain - initial_var_with_single_domain
+           return {var : list(self.domains[var])[0] for var in new_var_with_single_domain }
+        return False
+            
 
 
-        
     def backtrack(self, assignment):
         """
         Using Backtracking Search, take as input a partial assignment for the
@@ -318,18 +333,40 @@ class CrosswordCreator():
         # Check if the assignment is complete
         if self.assignment_complete(assignment):
             return assignment
-        # If a variable is not obtained
+        
+        # Select an unassigned variable
         var = self.select_unassigned_variable(assignment)
+
         for value in self.domains[var]:
-            assignment_copy = assignment.copy()
-            assignment_copy[var] = value
-            if self.consistent(assignment = assignment_copy):
+
+            domains_copy = {v: self.domains[v].copy() for v in self.domains}
+            assignment[var] = value
+            inferences = False
+
+            # Check if the current assignment is consistent
+            if self.consistent(assignment = assignment):
                 assignment[var] = value
-                result = self.backtrack(assignment)
-                if result != None:
-                    return result
-                # If the var generates a failure, delete the variable
-                del assignment[var]
+                self.domains[var] = {value}
+                inferences = self.Inference(var= var)
+
+                # Verify if the inferences did not fail
+                if inferences != False:
+                    # Add the new information obtained by inference
+                    assignment.update(inferences)
+                    
+                    result = self.backtrack(assignment)
+
+                    if result != None:
+                        return result
+                
+            # If the variable generates a failure, delete the variable and all inferences made, then restore the initial domain
+            del assignment[var]
+            if inferences != False:
+                for key in inferences:
+                    if key in assignment:
+                        del assignment[key]
+
+            self.domains = domains_copy
         return None
                     
 
